@@ -7,6 +7,7 @@ import { getMinhasVendas } from '../api';
 import { colors, radius, spacing, cardShadow } from '../theme';
 import StatCard from '../components/StatCard';
 import BarChart from '../components/BarChart';
+import StateBlock from '../components/StateBlock';
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -25,6 +26,13 @@ function agruparPorMes(vendas) {
       const mesIndex = parseInt(chave.slice(5, 7), 10) - 1;
       return { label: MESES[mesIndex] ?? chave, value: totais[chave] };
     });
+}
+
+function formatarData(dataIso) {
+  if (!dataIso) return 'Data não informada';
+  const [ano, mes, dia] = String(dataIso).split('-');
+  if (!ano || !mes || !dia) return String(dataIso);
+  return `${dia}/${mes}/${ano}`;
 }
 
 export default function MinhasVendasScreen({ navigation }) {
@@ -61,7 +69,7 @@ export default function MinhasVendasScreen({ navigation }) {
   if (loading && vendas.length === 0) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loading}>Carregando...</Text>
+        <StateBlock loading title="Carregando suas vendas..." />
       </View>
     );
   }
@@ -101,10 +109,13 @@ export default function MinhasVendasScreen({ navigation }) {
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.vazio}>
-            <Ionicons name="receipt-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.empty}>Você ainda não registrou nenhuma venda.</Text>
-          </View>
+          <StateBlock
+            icon={erro ? 'alert-circle-outline' : 'receipt-outline'}
+            title={erro ? 'Não foi possível carregar suas vendas.' : 'Nenhuma venda registrada'}
+            description={erro || 'Assim que você vender um veículo, o histórico aparecerá aqui.'}
+            actionLabel="Tentar novamente"
+            onAction={carregar}
+          />
         }
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -112,10 +123,18 @@ export default function MinhasVendasScreen({ navigation }) {
               <Ionicons name="cash-outline" size={18} color={colors.gold} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.data}>{item.dataVenda}</Text>
-              <Text style={styles.detalhe}>Carro #{item.idCarro} · R$ {Number(item.valorvenda).toFixed(2)}</Text>
+              <Text style={styles.data}>{formatarData(item.dataVenda)}</Text>
+              <Text style={styles.detalhe}>
+                {item.carroNome ? `${item.carroNome}${item.carroModelo ? ` ${item.carroModelo}` : ''}` : `Carro #${item.idCarro}`}
+              </Text>
+              <Text style={styles.subdetalhe}>
+                Vendedor #{item.idFuncionario} · R$ {Number(item.valorvenda).toFixed(2)}
+              </Text>
             </View>
-            <Text style={styles.comissao}>+R$ {Number(item.comissao).toFixed(2)}</Text>
+            <View style={styles.statusWrap}>
+              <Text style={styles.comissao}>+R$ {Number(item.comissao).toFixed(2)}</Text>
+              <Text style={styles.status}>{item.statusCarro || 'Vendido'}</Text>
+            </View>
           </View>
         )}
       />
@@ -161,5 +180,18 @@ const styles = StyleSheet.create({
   },
   data: { color: colors.textMuted, fontSize: 11 },
   detalhe: { color: colors.textPrimary, marginTop: 2, fontWeight: '600' },
+  subdetalhe: { color: colors.textMuted, marginTop: 2, fontSize: 12 },
+  statusWrap: { alignItems: 'flex-end', gap: 4 },
   comissao: { color: colors.success, fontWeight: '800' },
+  status: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    backgroundColor: colors.bgInput,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
 });

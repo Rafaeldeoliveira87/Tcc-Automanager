@@ -447,50 +447,71 @@ public class InterfaceGrafica extends JFrame {
     // AÇÕES — CARROS
     // ════════════════════════════════════════════════════════════════════
     private void adicionarCarro() {
-        try {
-            String nome   = pedirTexto("Nome do carro:", null);      if (nome == null) return;
-            String modelo = pedirTexto("Modelo:", null);             if (modelo == null) return;
-            String anoStr = pedirTexto("Ano (ex: 2023):", null);     if (anoStr == null) return;
-            int ano = Integer.parseInt(anoStr.trim());
-
-            String precoStr = pedirTexto("Preço (ex: 85000.00):", null); if (precoStr == null) return;
-            double preco = Double.parseDouble(precoStr.replace(",", "."));
-
-            String status = pedirOpcao("Status:", new String[]{"Disponível", "Vendido"}, "Disponível");
-            if (status == null) return;
-            String nivel = pedirOpcao("Nível:", new String[]{"Basico", "Medio", "Luxo"}, "Basico");
-            if (nivel == null) return;
-
-            carroDAO.save(new Carro(0, nome, modelo, ano, preco, status, nivel));
-            preencherCarros(carroDAO.loadAll());
-            JOptionPane.showMessageDialog(this, "Carro salvo com sucesso!");
-
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Valor inválido: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro ao salvar: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        abrirFormularioCarro(null);
     }
 
     private void editarCarro(JTable tabela) {
         int linha = tabela.getSelectedRow();
         if (linha < 0) { aviso("Selecione um carro para editar."); return; }
-        try {
-            int    id     = (int) dtmCarros.getValueAt(linha, 0);
-            String nome   = pedirTexto("Nome:", String.valueOf(dtmCarros.getValueAt(linha, 1)));   if (nome == null) return;
-            String modelo = pedirTexto("Modelo:", String.valueOf(dtmCarros.getValueAt(linha, 2))); if (modelo == null) return;
-            int    ano    = Integer.parseInt(pedirTexto("Ano:", String.valueOf(dtmCarros.getValueAt(linha, 3))));
-            double preco  = Double.parseDouble(pedirTexto("Preço:", String.valueOf(dtmCarros.getValueAt(linha, 4))).replace(",", "."));
-            String status = pedirOpcao("Status:", new String[]{"Disponível", "Vendido"}, String.valueOf(dtmCarros.getValueAt(linha, 5))); if (status == null) return;
-            String nivel  = pedirOpcao("Nível:", new String[]{"Basico", "Medio", "Luxo"}, String.valueOf(dtmCarros.getValueAt(linha, 6))); if (nivel == null) return;
+        int id = (int) dtmCarros.getValueAt(linha, 0);
+        Carro atual = carroDAO.loadAll().stream()
+                .filter(c -> c.getId() == id)
+                .findFirst().orElse(null);
+        if (atual == null) { aviso("Carro não encontrado."); return; }
+        abrirFormularioCarro(atual);
+    }
 
-            carroDAO.update(new Carro(id, nome, modelo, ano, preco, status, nivel));
-            preencherCarros(carroDAO.loadAll());
-            JOptionPane.showMessageDialog(this, "Carro editado com sucesso!");
+    private void abrirFormularioCarro(Carro atual) {
+        JTextField txtNome = new JTextField(atual != null ? atual.getNome() : "");
+        JTextField txtModelo = new JTextField(atual != null ? atual.getModelo() : "");
+        JTextField txtAno = new JTextField(atual != null ? String.valueOf(atual.getAno()) : "");
+        JTextField txtPreco = new JTextField(atual != null ? String.valueOf(atual.getPreco()) : "");
+        JComboBox<String> comboStatus = new JComboBox<>(new String[]{"Disponível", "Vendido"});
+        JComboBox<String> comboNivel = new JComboBox<>(new String[]{"Basico", "Medio", "Luxo"});
 
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro ao editar: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+        if (atual != null) {
+            comboStatus.setSelectedItem(atual.getStatus());
+            comboNivel.setSelectedItem(atual.getNivel());
         }
+
+        JPanel form = criarGridFormulario();
+        form.add(new JLabel("Nome:"));   form.add(txtNome);
+        form.add(new JLabel("Modelo:")); form.add(txtModelo);
+        form.add(new JLabel("Ano:"));    form.add(txtAno);
+        form.add(new JLabel("Preço:"));  form.add(txtPreco);
+        form.add(new JLabel("Status:")); form.add(comboStatus);
+        form.add(new JLabel("Nível:"));  form.add(comboNivel);
+
+        abrirDialogoFormulario(atual == null ? "Adicionar carro" : "Editar carro", form, dialog -> {
+            String nome = txtNome.getText().trim();
+            String modelo = txtModelo.getText().trim();
+            if (nome.isBlank() || modelo.isBlank()) {
+                aviso("Preencha nome e modelo.");
+                return;
+            }
+
+            try {
+                int ano = Integer.parseInt(txtAno.getText().trim());
+                double preco = Double.parseDouble(txtPreco.getText().trim().replace(",", "."));
+                String status = (String) comboStatus.getSelectedItem();
+                String nivel = (String) comboNivel.getSelectedItem();
+
+                if (atual == null) {
+                    carroDAO.save(new Carro(0, nome, modelo, ano, preco, status, nivel));
+                    JOptionPane.showMessageDialog(this, "Carro salvo com sucesso!");
+                } else {
+                    carroDAO.update(new Carro(atual.getId(), nome, modelo, ano, preco, status, nivel));
+                    JOptionPane.showMessageDialog(this, "Carro editado com sucesso!");
+                }
+                preencherCarros(carroDAO.loadAll());
+                atualizarDashboard();
+                dialog.dispose();
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this, "Ano ou preço inválido.", "Erro", JOptionPane.ERROR_MESSAGE);
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro ao salvar: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
     }
 
     private void excluirCarro(JTable tabela) {
@@ -510,31 +531,50 @@ public class InterfaceGrafica extends JFrame {
     // AÇÕES — FUNCIONÁRIOS
     // ════════════════════════════════════════════════════════════════════
     private void registrarFuncionario() {
-        try {
-            String nome = pedirTexto("Nome do funcionário:", null); if (nome == null || nome.isBlank()) return;
-            String sal  = pedirTexto("Salário (ex: 3500.00):", null); if (sal == null) return;
-            double salario = Double.parseDouble(sal.replace(",", "."));
-            funcionarioDAO.save(new Funcionario(0, nome, salario));
-            preencherFuncionarios(funcionarioDAO.loadAll());
-            JOptionPane.showMessageDialog(this, "Funcionário registrado!");
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        abrirFormularioFuncionario(null);
     }
 
     private void editarFuncionario(JTable tabela) {
         int linha = tabela.getSelectedRow();
         if (linha < 0) { aviso("Selecione um funcionário para editar."); return; }
-        try {
-            int    id  = (int) dtmFunc.getValueAt(linha, 0);
-            String nome = pedirTexto("Nome:", String.valueOf(dtmFunc.getValueAt(linha, 1))); if (nome == null || nome.isBlank()) return;
-            double sal  = Double.parseDouble(pedirTexto("Salário:", String.valueOf(dtmFunc.getValueAt(linha, 2))).replace(",", "."));
-            funcionarioDAO.update(new Funcionario(id, nome, sal));
-            preencherFuncionarios(funcionarioDAO.loadAll());
-            JOptionPane.showMessageDialog(this, "Funcionário editado!");
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        int id = (int) dtmFunc.getValueAt(linha, 0);
+        Funcionario atual = funcionarioDAO.loadAll().stream()
+                .filter(f -> f.getId() == id)
+                .findFirst().orElse(null);
+        if (atual == null) { aviso("Funcionário não encontrado."); return; }
+        abrirFormularioFuncionario(atual);
+    }
+
+    private void abrirFormularioFuncionario(Funcionario atual) {
+        JTextField txtNome = new JTextField(atual != null ? atual.getNome() : "");
+        JTextField txtSalario = new JTextField(atual != null ? String.valueOf(atual.getSalario()) : "");
+
+        JPanel form = criarGridFormulario();
+        form.add(new JLabel("Nome:"));    form.add(txtNome);
+        form.add(new JLabel("Salário:")); form.add(txtSalario);
+
+        abrirDialogoFormulario(atual == null ? "Registrar funcionário" : "Editar funcionário", form, dialog -> {
+            String nome = txtNome.getText().trim();
+            if (nome.isBlank()) {
+                aviso("Informe o nome do funcionário.");
+                return;
+            }
+            try {
+                double salario = Double.parseDouble(txtSalario.getText().trim().replace(",", "."));
+                if (atual == null) {
+                    funcionarioDAO.save(new Funcionario(0, nome, salario));
+                    JOptionPane.showMessageDialog(this, "Funcionário registrado!");
+                } else {
+                    funcionarioDAO.update(new Funcionario(atual.getId(), nome, salario));
+                    JOptionPane.showMessageDialog(this, "Funcionário editado!");
+                }
+                preencherFuncionarios(funcionarioDAO.loadAll());
+                atualizarDashboard();
+                dialog.dispose();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
     }
 
     private void excluirFuncionario(JTable tabela) {
@@ -648,80 +688,36 @@ public class InterfaceGrafica extends JFrame {
     // AÇÕES — USUÁRIOS
     // ════════════════════════════════════════════════════════════════════
     private void adicionarUsuario() {
-        JTextField txtUsername    = new JTextField();
-        JPasswordField pf1        = new JPasswordField();
-        JPasswordField pf2        = new JPasswordField();
-        JComboBox<String> comboPapel = new JComboBox<>(new String[]{"GERENTE", "VENDEDOR"});
-        JComboBox<Object> comboFunc  = criarComboFuncionarios(null);
-
-        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
-        form.add(new JLabel("Username:"));         form.add(txtUsername);
-        form.add(new JLabel("Senha:"));            form.add(pf1);
-        form.add(new JLabel("Confirmar senha:"));  form.add(pf2);
-        form.add(new JLabel("Papel:"));            form.add(comboPapel);
-        form.add(new JLabel("Funcionário (vendedor):")); form.add(comboFunc);
-
-        comboPapel.addActionListener(e -> {
-            boolean vendedor = "VENDEDOR".equals(comboPapel.getSelectedItem());
-            comboFunc.setEnabled(vendedor);
-            if (!vendedor) comboFunc.setSelectedIndex(0);
-        });
-        comboFunc.setEnabled(false);
-
-        int ok = JOptionPane.showConfirmDialog(this, form,
-                "Adicionar Usuário", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (ok != JOptionPane.OK_OPTION) return;
-
-        String username = txtUsername.getText().trim();
-        String senha1   = new String(pf1.getPassword());
-        String senha2   = new String(pf2.getPassword());
-        String papel    = (String) comboPapel.getSelectedItem();
-
-        if (username.isEmpty() || senha1.isEmpty()) { aviso("Preencha usuário e senha."); return; }
-        if (!senha1.equals(senha2))                 { aviso("As senhas não coincidem."); return; }
-        if (senha1.length() < 6)                    { aviso("A senha deve ter pelo menos 6 caracteres."); return; }
-
-        Integer funcionarioId = null;
-        if ("VENDEDOR".equals(papel)) {
-            funcionarioId = extrairFuncionarioId(comboFunc);
-            if (funcionarioId == null) {
-                aviso("Vendedor precisa estar vinculado a um funcionário cadastrado.");
-                return;
-            }
-        }
-
-        try {
-            usuarioDAO.criarUsuario(username, senha1, papel, funcionarioId);
-            preencherUsuarios(usuarioDAO.listarTodos());
-            JOptionPane.showMessageDialog(this, "Usuário adicionado com sucesso!");
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+        abrirFormularioUsuario(null);
     }
 
     private void editarUsuario(JTable tabela) {
         int linha = tabela.getSelectedRow();
         if (linha < 0) { aviso("Selecione um usuário para editar."); return; }
 
-        int    id            = (int) dtmUsuarios.getValueAt(linha, 0);
-        String usernameAtual = String.valueOf(dtmUsuarios.getValueAt(linha, 1));
-        String papelAtual    = String.valueOf(dtmUsuarios.getValueAt(linha, 2));
-
+        int id = (int) dtmUsuarios.getValueAt(linha, 0);
         Usuario atual = usuarioDAO.listarTodos().stream()
                 .filter(u -> u.getId() == id).findFirst().orElse(null);
-        Integer funcionarioAtual = atual != null ? atual.getFuncionarioId() : null;
+        if (atual == null) { aviso("Usuário não encontrado."); return; }
+        abrirFormularioUsuario(atual);
+    }
 
-        JTextField txtUsername       = new JTextField(usernameAtual);
-        JPasswordField pfSenha       = new JPasswordField();
+    private void abrirFormularioUsuario(Usuario atual) {
+        boolean edicao = atual != null;
+        JTextField txtUsername = new JTextField(edicao ? atual.getUsername() : "");
+        JPasswordField pfSenha = new JPasswordField();
+        JPasswordField pfConfirmar = new JPasswordField();
         JComboBox<String> comboPapel = new JComboBox<>(new String[]{"GERENTE", "VENDEDOR"});
-        comboPapel.setSelectedItem(papelAtual);
-        JComboBox<Object> comboFunc  = criarComboFuncionarios(funcionarioAtual);
+        JComboBox<Object> comboFunc = criarComboFuncionarios(edicao ? atual.getFuncionarioId() : null);
 
-        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
-        form.add(new JLabel("Username:"));                         form.add(txtUsername);
-        form.add(new JLabel("Nova senha (vazio = manter):")); form.add(pfSenha);
-        form.add(new JLabel("Papel:"));                            form.add(comboPapel);
-        form.add(new JLabel("Funcionário (vendedor):"));           form.add(comboFunc);
+        if (edicao) comboPapel.setSelectedItem(atual.getPapel());
+
+        JPanel form = criarGridFormulario();
+        form.add(new JLabel("Username:")); form.add(txtUsername);
+        form.add(new JLabel(edicao ? "Nova senha (opcional):" : "Senha:")); form.add(pfSenha);
+        form.add(new JLabel(edicao ? "Confirmar nova senha:" : "Confirmar senha:")); form.add(pfConfirmar);
+        form.add(new JLabel("Papel:")); form.add(comboPapel);
+        form.add(new JLabel("Funcionário (vendedor):")); form.add(comboFunc);
 
         Runnable syncCombo = () -> {
             boolean vendedor = "VENDEDOR".equals(comboPapel.getSelectedItem());
@@ -731,29 +727,54 @@ public class InterfaceGrafica extends JFrame {
         comboPapel.addActionListener(e -> syncCombo.run());
         syncCombo.run();
 
-        int ok = JOptionPane.showConfirmDialog(this, form,
-                "Editar Usuário", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if (ok != JOptionPane.OK_OPTION) return;
+        abrirDialogoFormulario(edicao ? "Editar usuário" : "Adicionar usuário", form, dialog -> {
+            String username = txtUsername.getText().trim();
+            String senha = new String(pfSenha.getPassword());
+            String confirmarSenha = new String(pfConfirmar.getPassword());
+            String papel = (String) comboPapel.getSelectedItem();
 
-        String papel = (String) comboPapel.getSelectedItem();
-        Integer funcionarioId = null;
-        if ("VENDEDOR".equals(papel)) {
-            funcionarioId = extrairFuncionarioId(comboFunc);
-            if (funcionarioId == null) {
-                aviso("Vendedor precisa estar vinculado a um funcionário cadastrado.");
+            if (username.isEmpty()) {
+                aviso("Preencha o usuário.");
                 return;
             }
-        }
+            if (!edicao && senha.isEmpty()) {
+                aviso("Preencha a senha.");
+                return;
+            }
+            if (!senha.isEmpty() || !confirmarSenha.isEmpty()) {
+                if (!senha.equals(confirmarSenha)) {
+                    aviso("As senhas não coincidem.");
+                    return;
+                }
+                if (senha.length() < 6) {
+                    aviso("A senha deve ter pelo menos 6 caracteres.");
+                    return;
+                }
+            }
 
-        try {
-            usuarioDAO.update(
-                    new Usuario(id, txtUsername.getText().trim(), papel, funcionarioId),
-                    new String(pfSenha.getPassword()));
-            preencherUsuarios(usuarioDAO.listarTodos());
-            JOptionPane.showMessageDialog(this, "Usuário editado!");
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+            Integer funcionarioId = null;
+            if ("VENDEDOR".equals(papel)) {
+                funcionarioId = extrairFuncionarioId(comboFunc);
+                if (funcionarioId == null) {
+                    aviso("Vendedor precisa estar vinculado a um funcionário cadastrado.");
+                    return;
+                }
+            }
+
+            try {
+                if (edicao) {
+                    usuarioDAO.update(new Usuario(atual.getId(), username, papel, funcionarioId), senha);
+                    JOptionPane.showMessageDialog(this, "Usuário editado!");
+                } else {
+                    usuarioDAO.criarUsuario(username, senha, papel, funcionarioId);
+                    JOptionPane.showMessageDialog(this, "Usuário adicionado com sucesso!");
+                }
+                preencherUsuarios(usuarioDAO.listarTodos());
+                dialog.dispose();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            }
+        });
     }
 
     private void excluirUsuario(JTable tabela) {
@@ -892,6 +913,36 @@ public class InterfaceGrafica extends JFrame {
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(30, 60, 120)),
                 new EmptyBorder(6, 8, 6, 8)));
         return tb;
+    }
+
+    private JPanel criarGridFormulario() {
+        JPanel form = new JPanel(new GridLayout(0, 2, 10, 10));
+        form.setBackground(new Color(18, 30, 55));
+        form.setBorder(new EmptyBorder(12, 12, 12, 12));
+        return form;
+    }
+
+    private void abrirDialogoFormulario(String titulo, JPanel form, java.util.function.Consumer<JDialog> onSalvar) {
+        JDialog dialog = new JDialog(this, titulo, false);
+        dialog.setLayout(new BorderLayout(0, 10));
+        dialog.getContentPane().setBackground(new Color(12, 20, 40));
+
+        JPanel acoes = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        acoes.setBackground(new Color(12, 20, 40));
+        JButton btnCancelar = criarBotao("Cancelar", COR_DANGER);
+        JButton btnSalvar = criarBotao("Salvar", new Color(39, 174, 96));
+
+        btnCancelar.addActionListener(e -> dialog.dispose());
+        btnSalvar.addActionListener(e -> onSalvar.accept(dialog));
+
+        acoes.add(btnCancelar);
+        acoes.add(btnSalvar);
+
+        dialog.add(form, BorderLayout.CENTER);
+        dialog.add(acoes, BorderLayout.SOUTH);
+        dialog.setSize(460, 340);
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
     }
 
     private JTextField criarCampoBusca(String placeholder) {

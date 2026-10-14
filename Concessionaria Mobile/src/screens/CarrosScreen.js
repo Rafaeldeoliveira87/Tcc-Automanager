@@ -3,9 +3,10 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, RefreshContr
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useTabStats } from '../context/TabStatsContext';
-import { getCarrosDisponiveis, registrarVenda } from '../api';
+import { getCarrosDisponiveis, getMinhasVendas, registrarVenda } from '../api';
 import { colors, radius, spacing, cardShadow } from '../theme';
 import LevelBadge from '../components/LevelBadge';
+import StateBlock from '../components/StateBlock';
 
 const FILTROS = [
   { id: 'todos', label: 'Todos' },
@@ -35,7 +36,7 @@ function nivelNormalizado(nivel) {
 
 export default function CarrosScreen({ navigation }) {
   const { sessao } = useAuth();
-  const { atualizarCarros } = useTabStats();
+  const { atualizarCarros, atualizarVendas } = useTabStats();
   const [carros, setCarros] = useState([]);
   const [filtro, setFiltro] = useState('todos');
   const [loading, setLoading] = useState(true);
@@ -99,7 +100,13 @@ export default function CarrosScreen({ navigation }) {
           { text: 'Ver minhas vendas', onPress: () => navigation.navigate('Vendas') },
         ]
       );
-      carregar();
+      await carregar();
+      try {
+        const vendasAtualizadas = await getMinhasVendas(sessao.token);
+        atualizarVendas(vendasAtualizadas.length);
+      } catch (_) {
+        // Em caso de falha pontual na atualização do badge, mantemos o fluxo principal.
+      }
     } catch (e) {
       Alert.alert('Não foi possível registrar a venda', e.message);
     } finally {
@@ -110,7 +117,7 @@ export default function CarrosScreen({ navigation }) {
   if (loading && carros.length === 0) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <Text style={styles.loading}>Carregando carros...</Text>
+        <StateBlock loading title="Carregando carros..." />
       </View>
     );
   }
@@ -163,14 +170,13 @@ export default function CarrosScreen({ navigation }) {
           />
         }
         ListEmptyComponent={
-          <View style={styles.vazio}>
-            <Ionicons name="car-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.empty}>
-              {filtro === 'todos'
-                ? 'Nenhum carro disponível no momento.'
-                : 'Nenhum carro neste nível.'}
-            </Text>
-          </View>
+          <StateBlock
+            icon={erro ? 'alert-circle-outline' : 'car-outline'}
+            title={erro ? 'Não foi possível carregar os carros.' : 'Nenhum carro disponível'}
+            description={filtro === 'todos' ? 'Tente atualizar para buscar novos veículos.' : 'Altere o filtro para ver outros níveis.'}
+            actionLabel="Tentar novamente"
+            onAction={carregar}
+          />
         }
         renderItem={({ item }) => {
           const comissao = estimarComissao(item.preco, item.nivel);
