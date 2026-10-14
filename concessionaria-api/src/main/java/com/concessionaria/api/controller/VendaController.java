@@ -3,6 +3,7 @@ package com.concessionaria.api.controller;
 import com.concessionaria.api.dao.DaoCarroBD;
 import com.concessionaria.api.dao.DaoVendasBD;
 import com.concessionaria.api.dto.Dtos.ErroResponse;
+import com.concessionaria.api.dto.Dtos.MinhaVendaResponse;
 import com.concessionaria.api.dto.Dtos.VendaRequest;
 import com.concessionaria.api.dto.Dtos.VendaResponse;
 import com.concessionaria.api.entidade.Carro;
@@ -70,6 +71,23 @@ public class VendaController {
         }
 
         List<Vendas> vendas = daoVendas.listarPorFuncionario(funcionarioId);
-        return ResponseEntity.ok(vendas);
+        List<MinhaVendaResponse> resposta = vendas.stream().map(venda -> {
+            Carro carro = daoCarro.buscarPorId(venda.getIdCarro());
+            return new MinhaVendaResponse(
+                    venda.getIdVenda(),
+                    venda.getIdCarro(),
+                    venda.getIdFuncionario(),
+                    venda.getValorvenda(),
+                    venda.getComissao(),
+                    venda.getDataVenda(),
+                    carro != null ? carro.getNome() : null,
+                    carro != null ? carro.getModelo() : null,
+                    carro != null ? carro.getAno() : null,
+                    carro != null ? carro.getNivel() : null,
+                    carro != null ? carro.getStatus() : null
+            );
+        }).toList();
+
+        return ResponseEntity.ok(resposta);
     }
 }

@@ -38,6 +38,21 @@ public class Dtos {
         double comissao
     ) {}
 
+    /** Resposta detalhada de GET /vendas/minhas (mantém campos legados + detalhes). */
+    public record MinhaVendaResponse(
+        int idVenda,
+        int idCarro,
+        int idFuncionario,
+        double valorvenda,
+        double comissao,
+        java.time.LocalDate dataVenda,
+        String carroNome,
+        String carroModelo,
+        Integer carroAno,
+        String carroNivel,
+        String statusCarro
+    ) {}
+
     /** Formato padrão de mensagem de erro devolvida pela API */
     public record ErroResponse(String mensagem) {}
 }
